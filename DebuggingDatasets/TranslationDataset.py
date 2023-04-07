@@ -1,8 +1,8 @@
 import pickle
-from PIL import Image
 import random
 from pathlib import Path
 
+from PIL import Image
 from torch.utils.data import Dataset
 from torchvision.datasets import MNIST
 
@@ -20,13 +20,17 @@ class TranslationDataset(Dataset):
 
 
     def __len__(self):
-        return len(self.mnist_dataset)
+        return len(self.mnist_dataset) * 2
 
     def __getitem__(self, index):
-        image, label = self.mnist_dataset[index]
-        image = image.transform(image.size, Image.AFFINE, self.translations[index])
+        true_index = index if index < len(self.mnist_dataset) else index - len(self.mnist_dataset)
+        image, label = self.mnist_dataset[true_index]
+
+        if index < len(self.mnist_dataset):
+            return self.transforms(image), label, (1, 0, 0, 0, 1, 0)
+        image = image.transform(image.size, Image.AFFINE, self.translations[true_index])
         image = self.transforms(image)
-        return image, label, self.translations[index]
+        return image, label, self.translations[true_index]
 
     def generate_random_translations(self):
         translations = []

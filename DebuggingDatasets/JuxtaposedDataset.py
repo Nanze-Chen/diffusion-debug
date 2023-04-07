@@ -27,7 +27,7 @@ class JuxtaposedDataset(Dataset):
         img1, label1 = self.mnist_dataset[p1]
         img2, label2 = self.mnist_dataset[p2]
         combined_img = self.transforms(np.hstack((img1, img2)))
-        return combined_img, label1, label2, p1, p2
+        return combined_img, label1 * 10 + label2, p1, p2
 
     def generate_random_juxtapositions(self):
         juxtapositions = []
