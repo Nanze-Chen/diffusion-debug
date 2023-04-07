@@ -1,2 +1,6 @@
 venv/
-.jukit
+.jukit/
+.ipynb_checkpoints/
+MNIST/
+__pycache__
+.mypy_cache
