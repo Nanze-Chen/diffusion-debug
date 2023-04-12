@@ -1,11 +1,14 @@
-from PIL import Image
-import blobfile as bf
-from mpi4py import MPI
-import numpy as np
 import os
+import pickle
+from pathlib import Path
+
+import blobfile as bf
+import numpy as np
+import torchvision.transforms as transforms
+from mpi4py import MPI
+from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 from torchvision.datasets import CIFAR10, MNIST
-import torchvision.transforms as transforms
 
 
 def load_data(
@@ -106,10 +109,6 @@ class DefaultDataset(Dataset):
                 download=True,
                 transform=tran_transform
             )
-        elif default_dataset == "MNIST_1st_half":
-            pass
-        elif default_dataset == "MNIST_2nd_half":
-            pass
         elif default_dataset == "CIFAR10":
             dataset = CIFAR10(
                 os.path.join(os.getcwd(), "datasets", "cifar10"),
@@ -117,10 +116,10 @@ class DefaultDataset(Dataset):
                 download=True,
                 transform=tran_transform,
             )
-        elif default_dataset == "CIFAR10_1st_half":
-            pass
-        elif default_dataset == "CIFAR10_2nd_half":
-            pass
+        elif default_dataset == "Translations":
+            dataset = TranslationDataset(tran_transform) 
+        elif default_dataset == "Juxtaposition":
+            dataset = JuxtaposedDataset(tran_transform)
         else:
             raise ValueError("Invalid default dataset is given")
 
@@ -166,3 +165,88 @@ class ImageDataset(Dataset):
         if self.local_classes is not None:
             out_dict["y"] = np.array(self.local_classes[idx], dtype=np.int64)
         return np.transpose(arr, [2, 0, 1]), out_dict
+
+
+class TranslationDataset(Dataset):
+    def __init__(self, transforms) -> None:
+        super().__init__()
+        self.mnist_dataset = MNIST("./", download=True)
+        self.transforms = transforms
+
+        translation_data_path = Path("./translations.pkl")
+        if not translation_data_path.exists():
+            self.translation_data = self.generate_random_translations()
+        self.translations = self.load_random_translations()
+
+
+    def __len__(self):
+        return len(self.mnist_dataset) * 2
+
+    def __getitem__(self, index):
+        true_index = index if index < len(self.mnist_dataset) else index - len(self.mnist_dataset)
+        image, label = self.mnist_dataset[true_index]
+
+        if index < len(self.mnist_dataset):
+            return self.transforms(image), label, (1, 0, 0, 0, 1, 0)
+        image = image.transform(image.size, Image.AFFINE, self.translations[true_index])
+        image = self.transforms(image)
+        return image, label, self.translations[true_index]
+
+    def generate_random_translations(self):
+        translations = []
+        for _ in range(len(self.mnist_dataset)):
+            x, y = random.randint(-14, 14), random.randint(-14, 14)
+            t = (1, 0, x, 0, 1, y)
+            translations.append(t)
+
+        with open("./translations.pkl", "wb") as f:
+            pickle.dump(translations, f)
+
+
+    def load_random_translations(self):
+        with open("./translations.pkl", "rb") as f:
+            data = pickle.load(f)
+        return data
+
+
+class JuxtaposedDataset(Dataset):
+    def __init__(self, transforms) -> None:
+        super().__init__()
+        self.mnist_dataset = MNIST("./", download=True)
+        self.transforms = transforms
+
+        juxtaposition_data_path = Path("./juxtapositions.pkl")
+        if not juxtaposition_data_path.exists():
+            self.generate_random_juxtapositions()
+        self.juxtapositions = self.load_random_juxtapositions()
+
+
+    def __len__(self):
+        return len(self.juxtapositions)
+
+    def __getitem__(self, index):
+        p1, p2 = self.juxtapositions[index]
+        img1, label1 = self.mnist_dataset[p1]
+        img2, label2 = self.mnist_dataset[p2]
+        combined_img = self.transforms(np.hstack((img1, img2)))
+        return combined_img, label1 * 10 + label2, p1, p2
+
+    def generate_random_juxtapositions(self):
+        juxtapositions = []
+        indices = [i for i in range(0, len(self.mnist_dataset))]
+
+        while len(indices) >= 1:
+            p1 = random.randint(0, len(indices) - 1)
+            indices.pop(p1)
+            p2 = random.randint(0, len(indices) - 1)
+            indices.pop(p2)
+            juxtapositions.append((p1, p2))
+
+        with open("./juxtapositions.pkl", "wb") as f:
+            pickle.dump(juxtapositions, f)
+
+
+    def load_random_juxtapositions(self):
+        with open("./juxtapositions.pkl", "rb") as f:
+            data = pickle.load(f)
+        return data

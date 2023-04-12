@@ -4,3 +4,4 @@ venv/
 MNIST/
 __pycache__
 .mypy_cache
+pyrightconfig.json
