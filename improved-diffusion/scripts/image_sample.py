@@ -5,23 +5,23 @@ numpy array. This can be used to produce samples for FID evaluation.
 
 import argparse
 import os
+from pathlib import Path
 
 import numpy as np
 import torch as th
 import torch.distributed as dist
-
 from improved_diffusion import dist_util, logger
-from improved_diffusion.script_util import (
-    NUM_CLASSES,
-    model_and_diffusion_defaults,
-    create_model_and_diffusion,
-    add_dict_to_argparser,
-    args_to_dict,
-)
+from improved_diffusion.script_util import (NUM_CLASSES, add_dict_to_argparser,
+                                            args_to_dict,
+                                            create_model_and_diffusion,
+                                            model_and_diffusion_defaults)
 
 
 def main():
     args = create_argparser().parse_args()
+    save_dir_filepath = args.save_path
+    save_dir = Path(save_dir_filepath)
+    assert save_dir.exists() and save_dir.is_dir()
 
     dist_util.setup_dist()
     logger.configure()
@@ -89,7 +89,7 @@ def main():
         label_arr = label_arr[: args.num_samples]
     if dist.get_rank() == 0:
         shape_str = "x".join([str(x) for x in arr.shape])
-        out_path = os.path.join(logger.get_dir(), f"samples_{shape_str}.npz")
+        out_path = save_dir_filepath if save_dir_filepath else os.path.join(logger.get_dir(), f"samples_{shape_str}.npz")
         logger.log(f"saving to {out_path}")
         if args.class_cond:
             np.savez(out_path, arr, label_arr)
@@ -109,6 +109,7 @@ def create_argparser():
         use_ddim=False,
         model_path="",
         img_channels_num=3,
+        save_path=""
     )
     defaults.update(model_and_diffusion_defaults())
     parser = argparse.ArgumentParser()
